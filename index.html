@@ -2,71 +2,95 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Instant Alarm Memo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>カレンダー・メモ Pro</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: #f0f2f5; }
-        .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); width: 100%; max-width: 400px; }
-        input, textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
-        button { background: #ff4757; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .alarm-list { margin-top: 20px; width: 100%; max-width: 400px; }
-        .alarm-item { background: #fff; padding: 10px; margin-bottom: 10px; border-left: 5px solid #ff4757; border-radius: 4px; display: flex; justify-content: space-between; }
+        body { font-family: -apple-system, sans-serif; background: #f0f2f5; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .card { background: white; padding: 25px; border-radius: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); width: 100%; max-width: 400px; box-sizing: border-box; }
+        h2 { text-align: center; color: #007aff; margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; color: #555; }
+        input, textarea, button { width: 100%; margin-bottom: 15px; padding: 12px; border: 1px solid #ddd; border-radius: 12px; box-sizing: border-box; font-size: 16px; -webkit-appearance: none; }
+        input[type="date"], input[type="time"] { font-size: 18px; font-weight: bold; text-align: center; }
+        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; padding: 16px; font-size: 18px; }
+        button:active { transform: scale(0.98); background: #0056b3; }
+        .status-msg { text-align: center; font-size: 12px; color: #888; }
     </style>
 </head>
 <body>
+
     <div class="card">
-        <h2>⏰ アラーム予約</h2>
-        <input type="time" id="alarmTime">
-        <textarea id="alarmMemo" placeholder="その時、何をする？（メモ）"></textarea>
-        <button onclick="setAlarm()">アラームをセットする</button>
+        <h2>📅 カレンダー登録</h2>
+        
+        <label>日付</label>
+        <input type="date" id="eventDate">
+        
+        <label>時刻</label>
+        <input type="time" id="eventTime">
+        
+        <label>メモ（タイトル）</label>
+        <textarea id="eventMemo" placeholder="何をする予定？" rows="2"></textarea>
+        
+        <button id="submitBtn" onclick="registerAll()">カレンダーに保存</button>
+        
+        <p class="status-msg" id="statusMsg">日付と時間は現在のものがセットされています</p>
     </div>
-    <div id="list" class="alarm-list"></div>
 
     <script>
-        // 通知の許可を得る
-        if (Notification.permission !== 'granted') Notification.requestPermission();
-
-        let alarms = [];
-
-        function setAlarm() {
-            const time = document.getElementById('alarmTime').value;
-            const memo = document.getElementById('alarmMemo').value;
-            if (!time) return alert("時間を設定してください");
-
-            const alarm = { time, memo, id: Date.now() };
-            alarms.push(alarm);
-            updateList();
+        // 1. 画面を開いた時に「今日の日付」と「現在の時刻」をセット
+        window.onload = function() {
+            const now = new Date();
             
-            // 入力欄をクリア
-            document.getElementById('alarmMemo').value = "";
-        }
+            // 日付を YYYY-MM-DD 形式でセット
+            const y = now.getFullYear();
+            const m = (now.getMonth() + 1).toString().padStart(2, '0');
+            const d = now.getDate().toString().padStart(2, '0');
+            document.getElementById('eventDate').value = `${y}-${m}-${d}`;
+            
+            // 時刻を HH:mm 形式でセット
+            const hh = now.getHours().toString().padStart(2, '0');
+            const mm = now.getMinutes().toString().padStart(2, '0');
+            document.getElementById('eventTime').value = `${hh}:${mm}`;
+        };
 
-        function updateList() {
-            const listDiv = document.getElementById('list');
-            listDiv.innerHTML = alarms.map(a => `
-                <div class="alarm-item">
-                    <span><b>${a.time}</b>: ${a.memo}</span>
-                    <button onclick="removeAlarm(${a.id})" style="width:auto; padding:5px; margin:0; background:#ccc;">削除</button>
-                </div>
-            `).join('');
-        }
+        async function registerAll() {
+            const date = document.getElementById('eventDate').value;
+            const time = document.getElementById('eventTime').value;
+            const memo = document.getElementById('eventMemo').value || "無題の予定";
+            const btn = document.getElementById('submitBtn');
 
-        function removeAlarm(id) {
-            alarms = alarms.filter(a => a.id !== id);
-            updateList();
-        }
+            if (!date || !time) return alert("日時を入力してください");
 
-        // 1秒ごとにチェック
-        setInterval(() => {
-            const now = new Date().toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'});
-            alarms.forEach((a, index) => {
-                if (a.time === now) {
-                    new Notification("時間です！", { body: a.memo });
-                    alert("【" + a.time + "】\n" + a.memo);
-                    removeAlarm(a.id);
+            // --- A. Googleカレンダーへ送信 (GAS) ---
+            btn.disabled = true;
+            btn.innerText = "保存中...";
+            
+            // ★以前作成したGASのURLをここに貼り付けてください★
+            const gasUrl = "https://script.google.com/macros/s/AKfycbyyW7NJ8Uq1hkOxqL_koUhxI8CuIFJGEckTQ1VEsRIiXTBeEBaGT4rSsXNJoV21q_0/exec";
+
+            try {
+                if(gasUrl.includes("http")) {
+                    await fetch(gasUrl, {
+                        method: "POST",
+                        mode: "no-cors",
+                        body: JSON.stringify({ date, time, memo })
+                    });
                 }
-            });
-        }, 1000);
+
+                // --- B. 同時にiPhoneの標準アラームも起動させる ---
+                // 日付が「今日」の場合のみアラームを飛ばす設定にするとより便利です
+                const shortcutUrl = "shortcuts://run-shortcut?name=MakeAlarm&input=" + encodeURIComponent(time);
+                window.location.href = shortcutUrl;
+
+                alert("カレンダーに予約しました！");
+                document.getElementById('eventMemo').value = "";
+            } catch (e) {
+                alert("送信エラー。URLを確認してください。");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "カレンダーに保存";
+            }
+        }
     </script>
 </body>
 </html>
